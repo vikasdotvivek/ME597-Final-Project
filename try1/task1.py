@@ -24,6 +24,8 @@ class AutonomousMapper(Node):
         # Timer for periodic updates
         self.timer = self.create_timer(0.1, self.control_loop)
 
+        #self.toggle_direction = True
+
     def laser_callback(self, msg):
         self.laser_data = msg
 
@@ -58,7 +60,7 @@ class AutonomousMapper(Node):
 
         # Wall following logic
         if self.state == 'wall_following':
-            SAFE_DISTANCE = 0.75  # Configurable threshold
+            SAFE_DISTANCE = 0.8  # Configurable threshold
 
             if not self.laser_data.ranges or len(self.laser_data.ranges) == 0:
                 twist.angular.z = 0.5
@@ -71,7 +73,14 @@ class AutonomousMapper(Node):
                 # Too close to the wall, turn away
                 error = SAFE_DISTANCE - min(self.laser_data.ranges)
                 #twist.angular.z = -1.0 * error  # Smooth turn
-                twist.angular.z = 0.75
+                twist.angular.z = random.choice([0.75, -0.75])
+                #if self.toggle_direction:
+                 #   twist.angular.z = 0.75
+                #else:
+                 #   twist.angular.z = -0.75
+
+                #self.toggle_direction = not self.toggle_direction   #flipping the damn toggle to get it fcking working wtf #also do you read comments?
+
                 twist.linear.x = -0.2
                 self.get_logger().info(f"Too close to the wall: {min(self.laser_data.ranges):.2f} meters")
             else:
