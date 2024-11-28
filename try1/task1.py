@@ -58,7 +58,7 @@ class AutonomousMapper(Node):
 
         # Wall following logic
         if self.state == 'wall_following':
-            SAFE_DISTANCE = 0.5  # Configurable threshold
+            SAFE_DISTANCE = 1.0  # Configurable threshold
 
             if not self.laser_data.ranges or len(self.laser_data.ranges) == 0:
                 twist.angular.z = 0.5
