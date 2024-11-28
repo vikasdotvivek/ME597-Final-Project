@@ -76,7 +76,7 @@ class AutonomousMapper(Node):
                 self.get_logger().info(f"Too close to the wall: {min(self.laser_data.ranges):.2f} meters")
             else:
                 # Normal wall-following movement
-                twist.linear.x = 0.1
+                twist.linear.x = 0.5
                 twist.angular.z = 0.0
                 self.get_logger().info(f"Wall following: Closest distance = {min(self.laser_data.ranges):.2f} meters")
 
