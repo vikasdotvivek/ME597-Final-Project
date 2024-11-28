@@ -67,7 +67,7 @@ class AutonomousMapper(Node):
 
         # Wall avoidance logic
         if front_distance < SAFE_DISTANCE:
-            twist.linear.x = -0.3
+            #twist.linear.x = -0.3
             # Obstacle ahead, decide based on side distances
             if left_distance > right_distance:
                 twist.angular.z = -2.0*(right_distance - SAFE_DISTANCE)  # Turn left
