@@ -67,13 +67,13 @@ class AutonomousMapper(Node):
             elif all(distance == float('inf') for distance in self.laser_data.ranges):
                 twist.angular.z = -1.0  # Rotate in place if no obstacles are detected
                 self.get_logger().info("All ranges are infinity (open space)")
-            elif max(self.laser_data.ranges) < SAFE_DISTANCE:
+            elif min(self.laser_data.ranges) < SAFE_DISTANCE:
                 # Too close to the wall, turn away
-                error = SAFE_DISTANCE - max(self.laser_data.ranges)
+                error = SAFE_DISTANCE - min(self.laser_data.ranges)
                 #twist.angular.z = -1.0 * error  # Smooth turn
-                twist.angular.z = -0.5
+                twist.angular.z = -0.75
                 twist.linear.x = 0.0
-                self.get_logger().info(f"Too close to the wall: {max(self.laser_data.ranges):.2f} meters")
+                self.get_logger().info(f"Too close to the wall: {min(self.laser_data.ranges):.2f} meters")
             else:
                 # Normal wall-following movement
                 twist.linear.x = 0.1
@@ -83,6 +83,8 @@ class AutonomousMapper(Node):
             # Occasionally switch to random bouncing
             if random.random() < 0.1:
                 self.state = 'random_bouncing'
+                if min(self.laser_data.ranges) < SAFE_DISTANCE:
+                    self.state = 'wall_following'
 
         elif self.state == 'random_bouncing':
             twist.linear.x = random.uniform(0.05, 0.2)
