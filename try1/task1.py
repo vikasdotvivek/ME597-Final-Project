@@ -6,6 +6,7 @@ from nav_msgs.msg import OccupancyGrid
 import math
 import random
 
+
 class AutonomousMapper(Node):
     def __init__(self):
         super().__init__('autonomous_mapper')
@@ -19,12 +20,10 @@ class AutonomousMapper(Node):
         self.laser_data = None
         self.map_data = None
         self.covered_cells = set()
-        self.state = 'wall_following'
+        self.state = 'exploring'
 
         # Timer for periodic updates
-        self.timer = self.create_timer(0.1, self.control_loop)
-
-        #self.toggle_direction = True
+        self.timer = self.create_timer(0.3, self.control_loop)
 
     def laser_callback(self, msg):
         self.laser_data = msg
@@ -51,60 +50,50 @@ class AutonomousMapper(Node):
 
     def control_loop(self):
         """Main control loop for autonomous navigation."""
-        if self.laser_data is None:
+        if self.laser_data is None or self.map_data is None:
             return
 
         twist = Twist()
+        SAFE_DISTANCE = 1.5  # Threshold for walls or obstacles
 
-        #self.get_logger().info(f"{self.laser_data.ranges}")
+        # Divide laser ranges into regions
+        front_distance = min(min(self.laser_data.ranges[0:15] + self.laser_data.ranges[-15:]), float('inf'))
+        left_distance = min(self.laser_data.ranges[90:120])  # Find the minimum distance in the left region
+        right_distance = min(self.laser_data.ranges[-120:-90])  # Find the minimum distance in the right region
 
-        # Wall following logic
-        if self.state == 'wall_following':
-            SAFE_DISTANCE = 0.8  # Configurable threshold
+        #self.get_logger().info(f"{front_distance:.2f} F")
+        #self.get_logger().info(f"{left_distance:.2f} L")
+        #self.get_logger().info(f"{right_distance:.2f} R")
 
-            if not self.laser_data.ranges or len(self.laser_data.ranges) == 0:
-                twist.angular.z = 0.5
-                twist.linear.x = 0.0
-                self.get_logger().info("No laser data available")
-            elif all(distance == float('inf') for distance in self.laser_data.ranges):
-                twist.angular.z = -1.0  # Rotate in place if no obstacles are detected
-                self.get_logger().info("All ranges are infinity (open space)")
-            elif min(self.laser_data.ranges[0],self.laser_data.ranges[1],self.laser_data.ranges[5]) < SAFE_DISTANCE:
-                # Too close to the wall, turn away
-                error = SAFE_DISTANCE - min(self.laser_data.ranges)
-                #twist.angular.z = -1.0 * error  # Smooth turn
-                twist.angular.z = random.choice([0.75, -0.75])
-                #if self.toggle_direction:
-                 #   twist.angular.z = 0.75
-                #else:
-                 #   twist.angular.z = -0.75
-
-                #self.toggle_direction = not self.toggle_direction   #flipping the damn toggle to get it fcking working wtf #also do you read comments?
-
-                twist.linear.x = -0.2
-                self.get_logger().info(f"Too close to the wall: {min(self.laser_data.ranges):.2f} meters")
+        # Wall avoidance logic
+        if front_distance < SAFE_DISTANCE:
+            twist.linear.x = 0.0
+            # Obstacle ahead, decide based on side distances
+            if left_distance > right_distance:
+                twist.angular.z = 0.5  # Turn left
             else:
-                # Normal wall-following movement
-                twist.linear.x = 0.5
-                twist.angular.z = 0.0
-                self.get_logger().info(f"Wall following: Closest distance = {min(self.laser_data.ranges):.2f} meters")
+                twist.angular.z = -0.5  # Turn right
+            self.get_logger().info(f"Obstacle ahead: {front_distance:.2f} meters")
 
-            # Occasionally switch to random bouncing
-            if random.random() < 0.1:
-                self.state = 'random_bouncing'
-                if min(self.laser_data.ranges) < SAFE_DISTANCE:
-                    self.state = 'wall_following'
+        if left_distance < SAFE_DISTANCE:
+            # Too close to the left wall
+            twist.angular.z = 0.3
+            twist.linear.x = 0.0
+            self.get_logger().info(f"Too close to the left: {left_distance:.2f} meters")
 
-        elif self.state == 'random_bouncing':
-            twist.linear.x = random.uniform(0.05, 0.2)
-            twist.angular.z = random.uniform(-1.0, 1.0)
-            self.get_logger().info("Random bouncing")
+        if right_distance < SAFE_DISTANCE:
+            # Too close to the right wall
+            twist.angular.z = -0.3
+            twist.linear.x = 0.0
+            self.get_logger().info(f"Too close to the right: {right_distance:.2f} meters")
+            
+        else:
+            # Free to move forward
+            twist.linear.x = 0.2
+            twist.angular.z = 0.0
+            self.get_logger().info("Moving forward")
 
-            # Occasionally switch back to wall following
-            if random.random() < 0.1:
-                self.state = 'wall_following'
-
-        self.cmd_vel_pub.publish(twist)
+            self.cmd_vel_pub.publish(twist)
 
 
 def main(args=None):
@@ -114,6 +103,6 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
+
 if __name__ == '__main__':
     main()
-
