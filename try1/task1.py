@@ -93,7 +93,7 @@ class AutonomousMapper(Node):
             twist.angular.z = 0.0
             self.get_logger().info("Moving forward")
 
-            self.cmd_vel_pub.publish(twist)
+        self.cmd_vel_pub.publish(twist)
 
 
 def main(args=None):
