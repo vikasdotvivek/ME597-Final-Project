@@ -70,9 +70,9 @@ class AutonomousMapper(Node):
             #twist.linear.x = -0.3
             # Obstacle ahead, decide based on side distances
             if left_distance > right_distance:
-                twist.angular.z = -2.0*(right_distance - SAFE_DISTANCE)  # Turn left
+                twist.angular.z = 2.0*(right_distance - SAFE_DISTANCE)  # Turn left
             else:
-                twist.angular.z = 2.0*(left_distance - SAFE_DISTANCE)  # Turn right
+                twist.angular.z = -2.0*(left_distance - SAFE_DISTANCE)  # Turn right
             self.get_logger().info(f"Obstacle ahead: {front_distance:.2f} meters")
 
         elif left_distance < SAFE_DISTANCE:
