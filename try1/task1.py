@@ -67,7 +67,7 @@ class AutonomousMapper(Node):
             elif all(distance == float('inf') for distance in self.laser_data.ranges):
                 twist.angular.z = -1.0  # Rotate in place if no obstacles are detected
                 self.get_logger().info("All ranges are infinity (open space)")
-            elif min(self.laser_data.ranges) < SAFE_DISTANCE:
+            elif min(self.laser_data.ranges[0],self.laser_data.ranges[1],self.laser_data.ranges[5]) < SAFE_DISTANCE:
                 # Too close to the wall, turn away
                 error = SAFE_DISTANCE - min(self.laser_data.ranges)
                 #twist.angular.z = -1.0 * error  # Smooth turn
