@@ -71,22 +71,26 @@ class AutonomousMapper(Node):
             # Obstacle ahead, decide based on side distances
             if left_distance > right_distance:
                 twist.angular.z = 2.25*(right_distance - SAFE_DISTANCE)  # Turn left
-                self.get_logger().info("Obstacle ahead, turn left")
-                twist.linear.x = 0.1
+                self.get_logger().info(f"Obstacle ahead, turn left: {(right_distance - SAFE_DISTANCE):.2f}")
+                if  ((right_distance - SAFE_DISTANCE) < 0.1):
+                    twist.angular.z = 0.2
+                #twist.linear.x = -0.1
             else:
                 twist.angular.z = -2.25*(left_distance - SAFE_DISTANCE)  # Turn right
-                self.get_logger().info("Obstacle ahead, turn right")
-                twist.linear.x = 0.1
+                self.get_logger().info(f"Obstacle ahead, turn right: {(left_distance - SAFE_DISTANCE):.2f}")
+                #twist.linear.x = -0.1
+                if  ((left_distance - SAFE_DISTANCE) < 0.1):
+                    twist.angular.z = -0.2
 
         elif left_distance < SAFE_DISTANCE:
             # Too close to the left wall
-            twist.angular.z = 1.0*(left_distance - SAFE_DISTANCE) #turn right
+            twist.angular.z = -1.0*(left_distance - SAFE_DISTANCE - left_distance) #turn right
             twist.linear.x = 0.1
             self.get_logger().info(f"Too close to the left: {left_distance:.2f} meters")
 
         elif right_distance < SAFE_DISTANCE:
             # Too close to the right wall
-            twist.angular.z = -1.0*(right_distance - SAFE_DISTANCE)     #turn left
+            twist.angular.z = 1.0*(SAFE_DISTANCE - right_distance)     #turn left
             twist.linear.x = 0.1
             self.get_logger().info(f"Too close to the right: {right_distance:.2f} meters")
             
