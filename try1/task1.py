@@ -84,7 +84,7 @@ class AutonomousMapper(Node):
 
         elif left_distance < SAFE_DISTANCE:
             # Too close to the left wall
-            twist.angular.z = -1.0*(left_distance - SAFE_DISTANCE - left_distance) #turn right
+            twist.angular.z = -1.0*(SAFE_DISTANCE - left_distance) #turn right
             twist.linear.x = 0.1
             self.get_logger().info(f"Too close to the left: {left_distance:.2f} meters")
 
