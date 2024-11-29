@@ -54,12 +54,12 @@ class AutonomousMapper(Node):
             return
 
         twist = Twist()
-        SAFE_DISTANCE = 0.4  # Threshold for walls or obstacles
+        SAFE_DISTANCE = 0.41  # Threshold for walls or obstacles
 
         # Divide laser ranges into regions
         front_distance = min(min(self.laser_data.ranges[0:15] + self.laser_data.ranges[-15:]), float('inf'))
-        left_distance = min(self.laser_data.ranges[100:105])  # Find the minimum distance in the left region
-        right_distance = min(self.laser_data.ranges[-105:-100])  # Find the minimum distance in the right region
+        left_distance = min(self.laser_data.ranges[75:90])  # Find the minimum distance in the left region
+        right_distance = min(self.laser_data.ranges[-90:-75])  # Find the minimum distance in the right region
 
         #self.get_logger().info(f"{front_distance:.2f} F")
         #self.get_logger().info(f"{left_distance:.2f} L")
