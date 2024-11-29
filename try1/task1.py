@@ -58,8 +58,8 @@ class AutonomousMapper(Node):
 
         # Divide laser ranges into regions
         front_distance = min(min(self.laser_data.ranges[0:15] + self.laser_data.ranges[-15:]), float('inf'))
-        left_distance = min(self.laser_data.ranges[90:120])  # Find the minimum distance in the left region
-        right_distance = min(self.laser_data.ranges[-120:-90])  # Find the minimum distance in the right region
+        left_distance = min(self.laser_data.ranges[100:105])  # Find the minimum distance in the left region
+        right_distance = min(self.laser_data.ranges[-105:-100])  # Find the minimum distance in the right region
 
         #self.get_logger().info(f"{front_distance:.2f} F")
         #self.get_logger().info(f"{left_distance:.2f} L")
