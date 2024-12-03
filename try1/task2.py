@@ -1,156 +1,150 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, PoseStamped
 from nav_msgs.msg import OccupancyGrid, Path
-from tf_transformations import euler_from_quaternion
-import numpy as np
+from geometry_msgs.msg import PoseStamped, Twist
+from sensor_msgs.msg import LaserScan
+from tf2_ros import Buffer, TransformListener
+from tf2_geometry_msgs import do_transform_pose
 import math
-from queue import PriorityQueue
+import heapq  # For A* priority queue
 
 
-class AStarNavigator(Node):
+class Task2Navigator(Node):
     def __init__(self):
-        super().__init__('a_star_navigator')
+        super().__init__('task2_navigator')
 
         # Publishers and Subscribers
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_callback, 10)
-        self.pose_sub = self.create_subscription(PoseStamped, '/amcl_pose', self.pose_callback, 10)
         self.goal_sub = self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+
+        # TF buffer and listener
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Variables
         self.map_data = None
-        self.robot_pose = None
         self.goal_pose = None
+        self.robot_pose = None
         self.path = []
-        self.resolution = None
-        self.origin = None
+
+        # Timer for control loop
+        self.timer = self.create_timer(0.1, self.control_loop)
 
     def map_callback(self, msg):
-        """Callback to receive the occupancy grid map."""
-        self.map_data = np.array(msg.data).reshape((msg.info.height, msg.info.width))
-        self.resolution = msg.info.resolution
-        self.origin = (msg.info.origin.position.x, msg.info.origin.position.y)
-
-    def pose_callback(self, msg):
-        """Callback to receive the robot's pose from AMCL."""
-        position = msg.pose.position
-        orientation = msg.pose.orientation
-        yaw = euler_from_quaternion(
-            [orientation.x, orientation.y, orientation.z, orientation.w]
-        )[2]
-        self.robot_pose = (position.x, position.y, yaw)
+        """Receive and store map data."""
+        self.map_data = msg
 
     def goal_callback(self, msg):
-        """Callback to receive a new goal pose."""
-        self.goal_pose = (msg.pose.position.x, msg.pose.position.y)
-        if self.map_data is not None and self.robot_pose is not None:
-            self.plan_path()
+        """Receive and store the goal pose."""
+        self.goal_pose = msg
+        self.get_logger().info(f"New goal received: {msg.pose.position}")
 
-    def plan_path(self):
-        """Plan a path from the current position to the goal using A*."""
-        start = self.world_to_grid(self.robot_pose[:2])
-        goal = self.world_to_grid(self.goal_pose)
+    def get_robot_pose(self):
+        """Get the robot's current pose in the map frame."""
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
+            pose = PoseStamped()
+            pose.header.frame_id = 'base_link'
+            pose.pose.orientation.w = 1.0  # Identity orientation
+            return do_transform_pose(pose, transform).pose
+        except Exception as e:
+            self.get_logger().error(f"Failed to get robot pose: {e}")
+            return None
 
-        # Run A* to generate the path
-        path = self.a_star(start, goal)
-        if path:
-            self.path = [self.grid_to_world(p) for p in path]
-            self.follow_path()
-        else:
-            self.get_logger().info("No path found to the goal.")
+    def a_star_planner(self, start, goal):
+        """Implement A* path planning."""
+        def heuristic(p1, p2):
+            return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
-    def a_star(self, start, goal):
-        """A* pathfinding algorithm."""
-        open_set = PriorityQueue()
-        open_set.put((0, start))
+        def get_neighbors(node):
+            directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            neighbors = []
+            for d in directions:
+                nx, ny = node[0] + d[0], node[1] + d[1]
+                if 0 <= nx < width and 0 <= ny < height and map_data[ny * width + nx] == 0:
+                    neighbors.append((nx, ny))
+            return neighbors
+
+        map_data = self.map_data.data
+        resolution = self.map_data.info.resolution
+        origin_x = self.map_data.info.origin.position.x
+        origin_y = self.map_data.info.origin.position.y
+        width = self.map_data.info.width
+        height = self.map_data.info.height
+
+        # Convert start and goal to grid coordinates
+        start = ((start[0] - origin_x) / resolution, (start[1] - origin_y) / resolution)
+        goal = ((goal[0] - origin_x) / resolution, (goal[1] - origin_y) / resolution)
+
+        # A* search
+        open_set = []
+        heapq.heappush(open_set, (0, start))
         came_from = {}
         g_score = {start: 0}
-        f_score = {start: self.heuristic(start, goal)}
+        f_score = {start: heuristic(start, goal)}
 
-        while not open_set.empty():
-            _, current = open_set.get()
+        while open_set:
+            _, current = heapq.heappop(open_set)
 
             if current == goal:
-                return self.reconstruct_path(came_from, current)
+                # Reconstruct path
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                path.reverse()
+                return path
 
-            neighbors = self.get_neighbors(current)
-            for neighbor in neighbors:
-                tentative_g_score = g_score[current] + 1  # Assume cost of 1 for neighbors
-                if tentative_g_score < g_score.get(neighbor, float('inf')):
+            for neighbor in get_neighbors(current):
+                tentative_g_score = g_score[current] + heuristic(current, neighbor)
+                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = tentative_g_score + self.heuristic(neighbor, goal)
-                    if neighbor not in [item[1] for item in open_set.queue]:
-                        open_set.put((f_score[neighbor], neighbor))
+                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
-        return None
-
-    def heuristic(self, a, b):
-        """Heuristic for A*: Euclidean distance."""
-        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
-
-    def get_neighbors(self, node):
-        """Get neighbors of a grid cell."""
-        neighbors = [
-            (node[0] + dx, node[1] + dy)
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        ]
-        return [
-            n for n in neighbors
-            if 0 <= n[0] < self.map_data.shape[0]
-            and 0 <= n[1] < self.map_data.shape[1]
-            and self.map_data[n[1], n[0]] == 0
-        ]
-
-    def reconstruct_path(self, came_from, current):
-        """Reconstruct the path from A* search."""
-        path = [current]
-        while current in came_from:
-            current = came_from[current]
-            path.append(current)
-        path.reverse()
-        return path
-
-    def world_to_grid(self, position):
-        """Convert world coordinates to grid indices."""
-        x, y = position
-        gx = int((x - self.origin[0]) / self.resolution)
-        gy = int((y - self.origin[1]) / self.resolution)
-        return gx, gy
-
-    def grid_to_world(self, index):
-        """Convert grid indices to world coordinates."""
-        gx, gy = index
-        x = self.origin[0] + gx * self.resolution
-        y = self.origin[1] + gy * self.resolution
-        return (x, y)
+        return []
 
     def follow_path(self):
-        """Follow the planned path using proportional control."""
-        for waypoint in self.path:
-            while not self.reach_waypoint(waypoint):
-                twist = Twist()
-                dx = waypoint[0] - self.robot_pose[0]
-                dy = waypoint[1] - self.robot_pose[1]
-                angle_to_goal = math.atan2(dy, dx)
-                angle_error = angle_to_goal - self.robot_pose[2]
+        """Follow the planned path using a controller."""
+        if not self.path:
+            return
 
-                twist.linear.x = 0.2
-                twist.angular.z = 0.5 * angle_error
-                self.cmd_vel_pub.publish(twist)
+        next_goal = self.path.pop(0)
+        twist = Twist()
+        twist.linear.x = 0.2  # Adjust speed
+        twist.angular.z = 0.5  # Adjust turn rate
+        self.cmd_vel_pub.publish(twist)
 
-    def reach_waypoint(self, waypoint):
-        """Check if the robot has reached a waypoint."""
-        distance = math.sqrt(
-            (self.robot_pose[0] - waypoint[0])**2 + (self.robot_pose[1] - waypoint[1])**2
-        )
-        return distance < 0.1
+    def control_loop(self):
+        """Main control loop for navigation."""
+        if self.map_data is None or self.goal_pose is None:
+            return
+
+        self.robot_pose = self.get_robot_pose()
+        if self.robot_pose is None:
+            return
+
+        # Plan path if no path exists
+        if not self.path:
+            start = (self.robot_pose.position.x, self.robot_pose.position.y)
+            goal = (self.goal_pose.pose.position.x, self.goal_pose.pose.position.y)
+            self.path = self.a_star_planner(start, goal)
+
+            if self.path:
+                self.get_logger().info(f"Path planned with {len(self.path)} waypoints.")
+            else:
+                self.get_logger().warn("Failed to plan path.")
+
+        # Follow the path
+        self.follow_path()
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = AStarNavigator()
+    node = Task2Navigator()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
@@ -158,4 +152,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
