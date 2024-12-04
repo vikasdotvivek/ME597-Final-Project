@@ -120,8 +120,8 @@ class Task2Navigator(Node):
 
     def control_loop(self):
         """Main control loop for navigation."""
-        if self.map_data is None or self.goal_pose is None:
-            return
+ #       if self.map_data is None or self.goal_pose is None:
+ #           return
 
         self.robot_pose = self.get_robot_pose()
         if self.robot_pose is None:
@@ -133,13 +133,19 @@ class Task2Navigator(Node):
             goal = (self.goal_pose.pose.position.x, self.goal_pose.pose.position.y)
             self.path = self.a_star_planner(start, goal)
 
+            #hardcoded dummy path:
+            self.path = [(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)]
+
             if self.path:
                 self.get_logger().info(f"Path planned with {len(self.path)} waypoints.")
             else:
                 self.get_logger().warn("Failed to plan path.")
 
         # Follow the path
+
+
         self.follow_path()
+        #self.get_logger().info("should follow path")
 
 
 def main(args=None):
