@@ -22,9 +22,10 @@ class Navigation(Node):
         self.goal_pose = PoseStamped()
         self.ttbot_pose = PoseStamped()
 
-        # Load the map
-        self.get_logger().info('Loading map from /home/me597/Desktop/sync_classroom_map.yaml...')
-        self.map_grid, self.map_resolution, self.map_origin = self.load_map('/home/me597/Desktop/sync_classroom_map.yaml')
+        # Load the map using os.path.join for correct path handling
+        map_yaml_path = '/home/me597/Desktop/sync_classroom_map.yaml'
+        self.get_logger().info(f'Loading map from {map_yaml_path}...')
+        self.map_grid, self.map_resolution, self.map_origin = self.load_map(map_yaml_path)
         self.get_logger().info('Map loaded successfully.')
 
         # Subscribers
@@ -54,9 +55,24 @@ class Navigation(Node):
         with open(map_yaml_file, 'r') as file:
             map_metadata = yaml.safe_load(file)
 
+        # Build the correct path for the image file
+        map_image_path = os.path.join(os.path.dirname(map_yaml_file), map_metadata['image'])
+        
         # Load the PGM file
-        map_image = cv2.imread(map_metadata['image'], cv2.IMREAD_GRAYSCALE)
-        grid = (map_image < 128).astype(int)  # Binary grid: 0 for free, 1 for obstacles
+        map_image = cv2.imread(map_image_path, cv2.IMREAD_GRAYSCALE)
+        if map_image is None:
+            self.get_logger().error(f"Failed to load map image from {map_image_path}")
+            raise FileNotFoundError(f"Map image file not found at {map_image_path}")
+        
+        # Use occupied_thresh and free_thresh to set obstacle and free space
+        occupied_thresh = map_metadata['occupied_thresh'] * 255  # scale to match 0-255 range of image
+        free_thresh = map_metadata['free_thresh'] * 255  # scale to match 0-255 range of image
+
+        grid = np.zeros_like(map_image, dtype=int)
+
+        # Mark cells as obstacles or free space
+        grid[map_image > occupied_thresh] = 1  # Occupied space (obstacles)
+        grid[map_image < free_thresh] = 0  # Free space
 
         resolution = map_metadata['resolution']
         origin = map_metadata['origin']
@@ -170,7 +186,11 @@ class Navigation(Node):
             self.get_logger().info('Creating path...')
             path = self.a_star_path_planner(self.ttbot_pose, self.goal_pose)
 
-            self.get_logger().info('Path created. Starting navigation...')
+            # Publish the path to RViz2 for visualization
+            self.path_pub.publish(path)
+            self.get_logger().info('Path created. Published to /global_plan.')
+
+            self.get_logger().info('Starting navigation...')
             idx = self.get_path_idx(path, self.ttbot_pose)
             current_goal = path.poses[idx]
             speed, heading = self.path_follower(self.ttbot_pose, current_goal)
