@@ -3,7 +3,8 @@
 import sys
 import os
 import numpy as np
-import heapq
+import yaml
+import cv2
 
 import rclpy
 from rclpy.node import Node
@@ -11,113 +12,153 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose, Twist
 
 
-class Task2(Node):
-    """! Task 2 Node.
-    This node implements navigation with static obstacles using the A* algorithm.
-    """
+class Navigation(Node):
+    """! Navigation node class."""
 
-    def __init__(self, node_name='Task2'):
+    def __init__(self, node_name='Navigation'):
         super().__init__(node_name)
+        self.get_logger().info('Initializing Navigation Node...')
         self.path = Path()
         self.goal_pose = PoseStamped()
         self.ttbot_pose = PoseStamped()
 
+        # Load the map
+        self.get_logger().info('Loading map from /home/me597/Desktop/sync_classroom_map.yaml...')
+        self.map_grid, self.map_resolution, self.map_origin = self.load_map('/home/me597/Desktop/sync_classroom_map.yaml')
+        self.get_logger().info('Map loaded successfully.')
+
         # Subscribers
+        self.get_logger().info('Setting up subscriptions...')
         self.create_subscription(PoseStamped, '/move_base_simple/goal', self.__goal_pose_cbk, 10)
         self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.__ttbot_pose_cbk, 10)
 
         # Publishers
+        self.get_logger().info('Setting up publishers...')
         self.path_pub = self.create_publisher(Path, 'global_plan', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        # Node rate
         self.rate = self.create_rate(10)
 
     def __goal_pose_cbk(self, data):
         self.goal_pose = data
         self.get_logger().info(
-            'Goal pose received: {:.4f}, {:.4f}'.format(self.goal_pose.pose.position.x, self.goal_pose.pose.position.y))
+            'Received new goal pose: {:.4f}, {:.4f}'.format(self.goal_pose.pose.position.x, self.goal_pose.pose.position.y))
 
     def __ttbot_pose_cbk(self, data):
         self.ttbot_pose = data.pose
         self.get_logger().info(
-            'Turtlebot pose updated: {:.4f}, {:.4f}'.format(self.ttbot_pose.pose.position.x, self.ttbot_pose.pose.position.y))
+            'Updated TurtleBot pose: {:.4f}, {:.4f}'.format(self.ttbot_pose.pose.position.x, self.ttbot_pose.pose.position.y))
+
+    def load_map(self, map_yaml_file):
+        """! Load map from .yaml and .pgm files."""
+        with open(map_yaml_file, 'r') as file:
+            map_metadata = yaml.safe_load(file)
+
+        # Load the PGM file
+        map_image = cv2.imread(map_metadata['image'], cv2.IMREAD_GRAYSCALE)
+        grid = (map_image < 128).astype(int)  # Binary grid: 0 for free, 1 for obstacles
+
+        resolution = map_metadata['resolution']
+        origin = map_metadata['origin']
+        return grid, resolution, origin
 
     def a_star_path_planner(self, start_pose, end_pose):
-        """! A* Path Planner.
-        @param start_pose  PoseStamped containing the start position.
-        @param end_pose    PoseStamped containing the goal position.
-        @return Path object containing the sequence of waypoints.
-        """
-        # Example A* implementation
-        start = (int(start_pose.pose.position.x), int(start_pose.pose.position.y))
-        goal = (int(end_pose.pose.position.x), int(end_pose.pose.position.y))
+        self.get_logger().info('Starting A* path planning...')
+        path = Path()
+        self.get_logger().info(
+            'A* planner initialized.\n> start: {},\n> end: {}'.format(start_pose.pose.position, end_pose.pose.position))
 
-        # Grid and cost placeholder
-        grid = np.zeros((20, 20))  # Adjust grid size as necessary
-        grid[5:10, 5:10] = 1  # Example obstacle area
-        open_set = []
-        heapq.heappush(open_set, (0, start))
+        start = (int((start_pose.pose.position.x - self.map_origin[0]) / self.map_resolution),
+                 int((start_pose.pose.position.y - self.map_origin[1]) / self.map_resolution))
+        goal = (int((end_pose.pose.position.x - self.map_origin[0]) / self.map_resolution),
+                int((end_pose.pose.position.y - self.map_origin[1]) / self.map_resolution))
+
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        open_set = {start: 0}
         came_from = {}
-        cost_so_far = {start: 0}
+        g_score = {start: 0}
+        f_score = {start: self.heuristic(start, goal)}
 
         while open_set:
-            _, current = heapq.heappop(open_set)
+            current = min(open_set, key=lambda node: f_score[node])
 
             if current == goal:
-                break
+                self.get_logger().info('Path found by A* algorithm.')
+                path.poses = self.reconstruct_path(came_from, current)
+                return path
 
-            neighbors = self.get_neighbors(current, grid.shape)
-            for next_node in neighbors:
-                new_cost = cost_so_far[current] + 1
-                if next_node not in cost_so_far or new_cost < cost_so_far[next_node]:
-                    cost_so_far[next_node] = new_cost
-                    priority = new_cost + self.heuristic(goal, next_node)
-                    heapq.heappush(open_set, (priority, next_node))
-                    came_from[next_node] = current
+            open_set.pop(current)
+            for direction in directions:
+                neighbor = (current[0] + direction[0], current[1] + direction[1])
 
-        # Reconstruct path
-        path = Path()
-        current = goal
+                if not (0 <= neighbor[0] < self.map_grid.shape[0] and
+                        0 <= neighbor[1] < self.map_grid.shape[1]) or self.map_grid[neighbor] == 1:
+                    continue
+
+                tentative_g_score = g_score[current] + 1
+
+                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = g_score[neighbor] + self.heuristic(neighbor, goal)
+                    if neighbor not in open_set:
+                        open_set[neighbor] = f_score[neighbor]
+
+        self.get_logger().error('A* failed to find a path.')
+        return path
+
+    def heuristic(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def reconstruct_path(self, came_from, current):
+        self.get_logger().info('Reconstructing path from A* algorithm...')
+        path = []
         while current in came_from:
             pose = PoseStamped()
             pose.pose.position.x = current[0]
             pose.pose.position.y = current[1]
-            path.poses.append(pose)
+            path.append(pose)
             current = came_from[current]
-
-        path.poses.reverse()
+        path.reverse()
+        self.get_logger().info('Path reconstruction complete.')
         return path
 
-    def get_neighbors(self, current, grid_shape):
-        """Returns neighbors of a grid cell."""
-        x, y = current
-        neighbors = []
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < grid_shape[0] and 0 <= ny < grid_shape[1]:
-                neighbors.append((nx, ny))
-        return neighbors
-
-    def heuristic(self, a, b):
-        """Calculates Manhattan distance heuristic."""
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    def get_path_idx(self, path, vehicle_pose):
+        min_dist = float('inf')
+        idx = 0
+        for i, pose in enumerate(path.poses):
+            dist = np.sqrt((pose.pose.position.x - vehicle_pose.pose.position.x) ** 2 +
+                           (pose.pose.position.y - vehicle_pose.pose.position.y) ** 2)
+            if dist < min_dist:
+                min_dist = dist
+                idx = i
+        self.get_logger().info('Next waypoint index in path: {}'.format(idx))
+        return idx
 
     def path_follower(self, vehicle_pose, current_goal_pose):
-        """Path Follower.
-        @param vehicle_pose        Current pose of the turtlebot.
-        @param current_goal_pose   Next waypoint in the path.
-        @return Speed and heading commands.
-        """
-        dx = current_goal_pose.pose.position.x - vehicle_pose.position.x
-        dy = current_goal_pose.pose.position.y - vehicle_pose.position.y
-        distance = np.sqrt(dx ** 2 + dy ** 2)
-        heading = np.arctan2(dy, dx)
+        self.get_logger().info('Following path...')
+        dx = current_goal_pose.pose.position.x - vehicle_pose.pose.position.x
+        dy = current_goal_pose.pose.position.y - vehicle_pose.pose.position.y
 
-        speed = min(0.5, distance)  # Cap the speed
-        return speed, heading
+        desired_heading = np.arctan2(dy, dx)
+        speed = 0.5
+
+        orientation_q = vehicle_pose.pose.orientation
+        current_heading = np.arctan2(
+            2.0 * (orientation_q.w * orientation_q.z + orientation_q.x * orientation_q.y),
+            1.0 - 2.0 * (orientation_q.y ** 2 + orientation_q.z ** 2))
+
+        heading_error = desired_heading - current_heading
+        heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
+
+        angular_velocity = 2.0 * heading_error
+
+        self.get_logger().info('Speed: {:.2f}, Angular Velocity: {:.2f}'.format(speed, angular_velocity))
+        return speed, angular_velocity
 
     def move_ttbot(self, speed, heading):
+        self.get_logger().info('Sending movement commands...')
         cmd_vel = Twist()
         cmd_vel.linear.x = speed
         cmd_vel.angular.z = heading
@@ -126,29 +167,28 @@ class Task2(Node):
     def run(self):
         while rclpy.ok():
             rclpy.spin_once(self, timeout_sec=0.1)
-
+            self.get_logger().info('Creating path...')
             path = self.a_star_path_planner(self.ttbot_pose, self.goal_pose)
-            idx = 0
 
-            while idx < len(path.poses):
-                current_goal = path.poses[idx]
-                speed, heading = self.path_follower(self.ttbot_pose.pose, current_goal)
-                self.move_ttbot(speed, heading)
+            self.get_logger().info('Path created. Starting navigation...')
+            idx = self.get_path_idx(path, self.ttbot_pose)
+            current_goal = path.poses[idx]
+            speed, heading = self.path_follower(self.ttbot_pose, current_goal)
+            self.move_ttbot(speed, heading)
 
-                idx += 1
-                self.rate.sleep()
+            self.rate.sleep()
 
 
 def main(args=None):
     rclpy.init(args=args)
-    task2 = Task2(node_name='Task2')
+    nav = Navigation(node_name='Navigation')
 
     try:
-        task2.run()
+        nav.run()
     except KeyboardInterrupt:
         pass
     finally:
-        task2.destroy_node()
+        nav.destroy_node()
         rclpy.shutdown()
 
 
