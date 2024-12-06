@@ -186,12 +186,21 @@ class Navigation(Node):
             self.get_logger().info('Creating path...')
             path = self.a_star_path_planner(self.ttbot_pose, self.goal_pose)
 
+            # Check if the path is empty
+            if not path.poses:
+                self.get_logger().warn('Generated path is empty, skipping navigation step.')
+                continue  # Skip this loop iteration if path is empty
+
             # Publish the path to RViz2 for visualization
             self.path_pub.publish(path)
             self.get_logger().info('Path created. Published to /global_plan.')
 
-            self.get_logger().info('Starting navigation...')
+            # Ensure the index is within bounds
             idx = self.get_path_idx(path, self.ttbot_pose)
+            if idx >= len(path.poses):
+                self.get_logger().warn(f'Invalid index {idx}. Adjusting to the last pose in the path.')
+                idx = len(path.poses) - 1  # Use the last pose if the index is out of bounds
+
             current_goal = path.poses[idx]
             speed, heading = self.path_follower(self.ttbot_pose, current_goal)
             self.move_ttbot(speed, heading)
