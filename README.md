@@ -1,4 +1,4 @@
-    //OneDrive is under the name of my friend, I'm using his laptop for Ubuntu
+    //OneDrive is under the name of my friend, I'm using his laptop for Ubuntu, hence his onedrive account
 
 #Task1 video:
 
