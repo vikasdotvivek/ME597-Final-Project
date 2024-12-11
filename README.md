@@ -1,3 +1,4 @@
+    //Gradescope isn't letting me upload screen captures (mp4). Links for tasks are provided below
     //OneDrive is under the name of my friend, I'm using his laptop for Ubuntu, hence his onedrive account
 
 #Task1 video:
