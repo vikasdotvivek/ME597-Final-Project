@@ -54,12 +54,12 @@ class AutonomousMapper(Node):
             return
 
         twist = Twist()
-        SAFE_DISTANCE = 0.42 # Threshold for walls or obstacles
+        SAFE_DISTANCE = 0.50 # threshold for walls or obstacles
 
         # Divide laser ranges into regions
         front_distance = min(min(self.laser_data.ranges[0:15] + self.laser_data.ranges[-15:]), float('inf'))
-        left_distance = min(self.laser_data.ranges[60:110])  # Find the minimum distance in the left region
-        right_distance = min(self.laser_data.ranges[-110:-60])  # Find the minimum distance in the right region
+        left_distance = min(self.laser_data.ranges[70:114])  # Find the minimum distance in the left region
+        right_distance = min(self.laser_data.ranges[-114:-70])  # Find the minimum distance in the right region
 
         #self.get_logger().info(f"{front_distance:.2f} F")
         #self.get_logger().info(f"{left_distance:.2f} L")
@@ -68,7 +68,7 @@ class AutonomousMapper(Node):
         # Wall avoidance logic
         if front_distance < SAFE_DISTANCE:
             #twist.linear.x = -0.3
-            # Obstacle ahead, decide based on side distances
+            
             if left_distance > right_distance:
                 twist.angular.z = 2.25*(right_distance - SAFE_DISTANCE)  # Turn left
                 self.get_logger().info(f"Obstacle ahead, turn left: {(right_distance - SAFE_DISTANCE):.2f}")
@@ -83,13 +83,13 @@ class AutonomousMapper(Node):
                     twist.angular.z = -0.2
 
         elif left_distance < SAFE_DISTANCE:
-            # Too close to the left wall
+            
             twist.angular.z = -1.0*(SAFE_DISTANCE - left_distance) #turn right
             twist.linear.x = 0.1
             self.get_logger().info(f"Too close to the left: {left_distance:.2f} meters")
 
         elif right_distance < SAFE_DISTANCE:
-            # Too close to the right wall
+            
             twist.angular.z = 1.0*(SAFE_DISTANCE - right_distance)     #turn left
             twist.linear.x = 0.1
             self.get_logger().info(f"Too close to the right: {right_distance:.2f} meters")
@@ -97,7 +97,7 @@ class AutonomousMapper(Node):
         else:
             # Free to move forward
 
-            twist.linear.x = 0.8*(front_distance - SAFE_DISTANCE)
+            twist.linear.x = 0.7*(front_distance - SAFE_DISTANCE)   #p-controller for dynamic speed control
             #twist.linear.x = 0.4
             twist.angular.z = 0.0
             self.get_logger().info("Moving forward")
