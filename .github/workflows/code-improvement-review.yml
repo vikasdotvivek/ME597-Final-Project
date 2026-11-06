@@ -1,0 +1,27 @@
+name: Code improvement triage
+on:
+  workflow_dispatch:
+  push:
+    branches: [review/code-improvements-2026-11-06]
+    paths-ignore: [.review/STATIC_REVIEW.md, .review/static-review.json]
+permissions: {contents: write}
+concurrency:
+  group: code-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.repository_owner == 'vikasdotvivek' && github.ref == 'refs/heads/review/code-improvements-2026-11-06'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: vikasdotvivek/PWM-PID-Colibri-VF50/.review@918dddc427ca61723cd10b878567c523e39b5612
+      - name: Commit review reports only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/review/code-improvements-2026-11-06'
+          git add -- .review/STATIC_REVIEW.md .review/static-review.json
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'docs(review): record static improvement candidates'
+          git push origin "HEAD:$GITHUB_REF"
