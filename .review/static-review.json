@@ -1,0 +1,109 @@
+{
+  "generator": "repository-static-triage",
+  "version": "1.0",
+  "repository": "vikasdotvivek/ME597-Final-Project",
+  "revision": "5d0ea9979db4e02ed3b5e43eda4fbd6b887d2891",
+  "tracked_files": 16,
+  "scanned": [
+    {
+      "path": "launch/mapper.launch.py",
+      "lines": 50,
+      "bytes": 1844
+    },
+    {
+      "path": "launch/navigator.launch.py",
+      "lines": 115,
+      "bytes": 4169
+    },
+    {
+      "path": "launch/turtlebot3_house.launch.py",
+      "lines": 94,
+      "bytes": 3214
+    },
+    {
+      "path": "setup.py",
+      "lines": 25,
+      "bytes": 660
+    },
+    {
+      "path": "test/test_copyright.py",
+      "lines": 25,
+      "bytes": 962
+    },
+    {
+      "path": "test/test_flake8.py",
+      "lines": 25,
+      "bytes": 884
+    },
+    {
+      "path": "test/test_pep257.py",
+      "lines": 23,
+      "bytes": 803
+    },
+    {
+      "path": "try1/__init__.py",
+      "lines": 0,
+      "bytes": 0
+    },
+    {
+      "path": "try1/task1.py",
+      "lines": 117,
+      "bytes": 4376
+    },
+    {
+      "path": "try1/task2.py",
+      "lines": 225,
+      "bytes": 8965
+    }
+  ],
+  "skipped": [
+    {
+      "path": ".github/workflows/code-improvement-review.yml",
+      "reason": "non-source format; content not audited"
+    },
+    {
+      "path": ".vscode/tasks.json",
+      "reason": "non-source format; content not audited"
+    },
+    {
+      "path": "README.md",
+      "reason": "non-source format; content not audited"
+    },
+    {
+      "path": "package.xml",
+      "reason": "non-source format; content not audited"
+    },
+    {
+      "path": "resource/try1",
+      "reason": "non-source format; content not audited"
+    },
+    {
+      "path": "setup.cfg",
+      "reason": "non-source format; content not audited"
+    }
+  ],
+  "manifests": [
+    "package.xml",
+    "setup.py"
+  ],
+  "conventional_test_paths": [
+    "test/test_copyright.py",
+    "test/test_flake8.py",
+    "test/test_pep257.py"
+  ],
+  "findings": [
+    {
+      "rule": "silent-except",
+      "priority": "P2",
+      "path": "try1/task2.py",
+      "line": 217,
+      "title": "Exception handler only passes",
+      "recommendation": "Decide whether the error is recoverable; surface nonrecoverable failures instead of silently continuing.",
+      "status": "review-required",
+      "source": "https://github.com/vikasdotvivek/ME597-Final-Project/blob/5d0ea9979db4e02ed3b5e43eda4fbd6b887d2891/try1/task2.py#L217"
+    }
+  ],
+  "total_findings": 1,
+  "findings_omitted": 0,
+  "execution": "No repository code, tests, builds or hardware were executed."
+}
